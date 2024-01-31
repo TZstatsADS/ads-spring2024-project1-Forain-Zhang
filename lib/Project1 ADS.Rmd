@@ -1,0 +1,340 @@
+---
+title: "ADS Project 1"
+author: ''
+date: '2024-01-31'
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE)
+library(stringr)
+library(tm)
+library(ggmap)
+library(dplyr)
+library(plyr)
+library(tm)
+library(wordcloud)
+library(RColorBrewer)
+library(ggplot2)
+library(topicmodels)
+library(knitr)
+library(tidytext)
+```
+
+
+## Introduction
+
+In the quest to understand the nuances of human happiness, text data analysis provides a unique lens through which to see the myriad ways in which people express their moments of joy. This project utilizes a rich dataset from HappyDB to delve into the core of how people describe happy moments using advanced text analytics and demographic analysis. By creating word clouds, exploring demographic distributions, and applying Latent Dirichlet Allocation (LDA) for topic modeling and k-means clustering, we embarked on a journey to reveal the themes and patterns of happiness resonance across different age groups, genders, and social roles. Our goal is not only to map the expression of happiness, but also to reveal the underlying currents that shape our perception and experience of joy.
+
+## EDA
+
+#### Load Cleaned and Processed Data
+
+```{r}
+data = read.csv('processed_moments.csv')
+```
+
+### WordCloud
+
+Word clouds can visually highlight the most common words in happy moments, making for a compelling graphical representation.
+
+```{r}
+# Create a corpus
+corpus <- Corpus(VectorSource(data$text))
+
+# Convert corpus to plain text documents and preprocess
+corpus <- tm_map(corpus, content_transformer(tolower))
+corpus <- tm_map(corpus, removePunctuation)
+corpus <- tm_map(corpus, removeNumbers)
+corpus <- tm_map(corpus, removeWords, stopwords("english"))
+
+# Generate a color palette
+col <- brewer.pal(6, "Dark2")
+
+# Create the word cloud
+wordcloud(corpus, min.freq = 25, scale = c(5, 2), rot.per = 0.25, random.color = TRUE, 
+          max.words = 45, random.order = FALSE, colors = col)
+```
+
+Based on the word cloud image provided, which highlights words such as "friend," "family," "enjoyed," "home," "time," and "dinner," we can infer that these terms are among the most frequently occurring in the HappyDB dataset's descriptions of happy moments. Some keywords such as "day" and "time" are not that informative, so are not included in the analysis.
+
+This suggests that social interactions, particularly those involving friends and family, are significant contributors to happiness. Moments enjoyed at home and during dinner time also appear to be important, indicating that personal relationships and shared experiences, especially around meals, play a crucial role in creating happy memories.
+
+The word cloud generated from descriptions of happy moments vividly illustrates that 'family', 'friends', and 'home' are central to our joy. The prominence of 'enjoyed', 'dinner', and 'talked' suggests that shared meals and conversations are treasured activities. It's interesting to note how 'time' also features heavily, perhaps reminding us that the moments we take to pause and engage with our loved ones are those that we cherish the most.
+
+### Distribution of demographics
+
+It is crucial to make connections between the keywords of happiness with the demographics in order to generate a well-rounded analysis. Therefore, i will explore the distribution of age and martial status due to particular interest and common sense.
+
+```{r}
+# Load the dataset
+demographic_data <- read.csv("demographic.csv")
+
+# Calculate the percentage of each marital status
+marital_percentage <- demographic_data %>%
+  group_by(marital) %>%
+  dplyr::summarise(count = n(), .groups = 'drop') %>%
+  mutate(percentage = (count / sum(count)) * 100)
+
+# Create a pie chart for marital status percentages with labels
+pie_chart <- ggplot(marital_percentage, aes(x = "", y = percentage, fill = marital)) +
+  geom_bar(stat = "identity", width = 1) +
+  coord_polar(theta = "y") +
+  theme_void() +
+  geom_text(aes(label = paste0(round(percentage, 1), "%")), 
+            position = position_stack(vjust = 0.5)) +
+  scale_fill_brewer(palette = "Pastel1") +
+  theme(legend.position = "right") +
+  labs(title = "Marital Status Distribution")
+
+# Display the pie chart
+print(pie_chart)
+
+# Ensure age is numeric
+demographic_data$age <- as.numeric(as.character(demographic_data$age))
+
+# Remove NA values from age for plotting
+demographic_data <- demographic_data %>% filter(!is.na(age))
+
+# Create a histogram for age distribution with x-axis limits from 0 to 100
+age_histogram <- ggplot(demographic_data, aes(x = age)) +
+  geom_histogram(binwidth = 5, fill = "blue", color = "black") +
+  labs(title = "Age Distribution", x = "Age", y = "Count") +
+  theme_minimal() +
+  scale_x_continuous(limits = c(0, 100)) # Set x-axis limits
+
+# Display the histogram
+print(age_histogram)
+```
+
+* Age Distribution
+
+The age histogram shows a distribution that is skewed towards younger ages with a peak in what appears to be the late 20s to early 30s age range. This could suggest that the majority of respondents in the dataset are young adults. 
+
+In the context of the HappyDB corpus, this age distribution is particularly relevant. The prominence of the younger adult demographic suggests that many of the happy moments reported may be related to life events that are common during this stage of life, such as establishing a career, forming significant relationships, or starting families. The focus on "family", "friend", "home" as keywords in the dataset may indicate that starting or having a family is a significant source of happiness for this age group.
+
+* Pie Chart
+
+The pie chart depicting marital status shows that a considerable portion of the dataset's respondents are married, which aligns with the age distribution we see in the histogram. The age range with the highest frequency corresponds to typical ages when marriage rates are higher. The fact that married status constitutes a substantial slice of the pie chart (appearing to be over half) can be associated with the age distribution and implies that marriage, or at least the partnership it represents, is a key aspect of reported happiness.
+
+* Conclusions
+
+The age histogram and marital status pie chart suggest a demographic skewed towards young and middle-aged adults, with a significant proportion being married. This skew could explain the prominence of keywords like "home," "friend," and "family" in the dataset's happy moments, indicating that relationships and domestic life are central to the respondents' experiences of happiness. The demographic data thus points towards a trend where personal connections are key contributors to happiness within this group.
+
+### Predicted_Category (Category of possible happiness)
+
+The dataset's analysis has yielded key insights into prevalent keywords and demographic patterns. Exploring the distribution of 'predicted_category' across the texts can further elucidate the underlying trends of happiness represented within the data.
+
+```{r}
+ggplot(data, aes(x = predicted_category)) +
+  geom_bar(fill = "skyblue", color = "black") +
+  labs(title = "Distribution of Predicted Categories", x = "Predicted Category", y = "Count") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) # Rotate x-axis labels for better readability
+```
+
+The bar chart visualizes the distribution of the predicted categories for the happy moments in your dataset. The categories "affection" and "achievement" are the most frequent, indicating that these themes are predominant in the dataset's descriptions of happiness. These two categories together signify that personal relationships and personal successes are central to the happiness experienced by individuals.
+
+Less frequent but still significant are categories like "enjoy_the_moment," "bonding," and "leisure," which suggests that moments of presence, social connection, and relaxation are also appreciated contributors to happiness. The categories "nature" and "exercise" have the fewest occurrences, which may reflect a lesser emphasis on outdoor activities or physical exercise in the dataset or could be a result of the demographic and lifestyle of the participants.
+
+
+#### Predicted_categories by demographics
+
+```{r}
+# Merge datasets by 'wid'
+merged_data <- merge(demographic_data, data, by = "wid")
+
+# Filter out any rows where gender or predicted_category is NA
+merged_data <- filter(merged_data, !is.na(gender), !is.na(predicted_category))
+
+# Plot distribution of predicted_category for male and female
+ggplot(merged_data, aes(x = predicted_category, fill = gender)) +
+  geom_bar(position = "dodge") +
+  labs(title = "Distribution of Predicted Categories by Gender",
+       x = "Predicted Category", y = "Count") +
+  scale_fill_manual(values = c("m" = "blue", "f" = "pink")) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+The bar chart provided illustrates the distribution of predicted categories of happiness segmented by gender.
+
+One notable observation from the analysis is that the theme of "achievement" is more prevalent among males, whereas "affection" is more dominant among females. This intriguing result corroborates societal "conventions" where men are often seen as bearing greater responsibility in professional or business contexts, while women are traditionally viewed as the primary caregivers within families.
+
+Furthermore, the category "leisure" also exhibits a higher frequency among males, suggesting that men might tend to seek happiness and alleviate stress through leisure activities. This pattern aligns with the broader understanding of how different genders may navigate and express their sources of happiness.
+
+```{r}
+# Bin the age into intervals of 10 years
+merged_data$age_group <- cut(merged_data$age, breaks=seq(0, 100, by=10),
+                             include.lowest=TRUE, right=FALSE,
+                             labels=paste(seq(0, 90, by=10), seq(9, 99, by=10), sep="-"))
+
+# Filter out any rows where age_group or predicted_category is NA
+merged_data <- filter(merged_data, !is.na(age_group), !is.na(predicted_category))
+
+# Plot distribution of predicted_category for each age group
+age_group_plot <- ggplot(merged_data, aes(x = predicted_category, fill = age_group)) +
+  geom_bar(position = "dodge") +
+  labs(title = "Distribution of Predicted Categories by Age Group",
+       x = "Predicted Category", y = "Count") +
+  scale_fill_brewer(palette="Spectral") + 
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+age_group_plot
+# ggsave("predicted_categories_age_group_plot.png", age_group_plot, width = 10, height = 6, dpi = 300)
+```
+
+The bar chart illustrates the distribution of predicted categories segmented by age groups, with each group spanning a decade.
+
+A compelling observation emerges when examining the 20-29 and 30-39 age brackets. Within the younger cohort (20-29), the theme of "achievement" occupies a larger proportion compared to "affection". Conversely, for individuals in the 30-39 age range, this pattern reverses, with "affection" surpassing "achievement" in its share of the distribution. This shift suggests a possible evolution in priorities or sources of happiness as individuals transition from their twenties to their thirties. It may reflect a broader societal or developmental trend where career and personal accomplishments are more emphasized in younger adulthood, while relationships and emotional connections gain precedence in later years.
+
+
+#### Topics modeling using LDA
+
+```{r}
+# Create a text corpus
+corpus <- Corpus(VectorSource(data$text))
+
+# Preprocess the corpus: lowercase, remove punctuation, numbers, stopwords, and extra whitespace
+corpus <- tm_map(corpus, content_transformer(tolower))
+corpus <- tm_map(corpus, removePunctuation)
+corpus <- tm_map(corpus, removeNumbers)
+corpus <- tm_map(corpus, removeWords, stopwords("english"))
+corpus <- tm_map(corpus, stripWhitespace)
+
+# Create DTM
+dtm <- DocumentTermMatrix(corpus)
+dtm <- removeSparseTerms(dtm, sparse = 0.99)  # Adjust the sparsity threshold as needed
+
+# Check again for any all-zero rows
+dtm <- dtm[rowSums(as.matrix(dtm)) > 0, ]
+
+# Now, run LDA
+set.seed(123)  
+k <- 5  
+lda_result <- LDA(dtm, k = k, control = list(seed = 1234))
+
+# Inspect the top terms in each topic
+topic_terms <- terms(lda_result, 6) 
+
+# Assign the most probable topic to each document
+document_topics <- topics(lda_result)
+
+
+# Convert to data frame
+topics_df <- data.frame(matrix(nrow = ncol(topic_terms), ncol = 6))
+
+for (i in 1:ncol(topic_terms)) {
+  topics_df[i, ] <- topic_terms[, i]
+}
+
+colnames(topics_df) <- paste("Term", 1:6, sep = "")
+rownames(topics_df) <- paste("Topic", 1:nrow(topics_df), sep = " ")
+
+# Use kable to convert the data frame to LaTeX code
+kable(topics_df)
+```
+
+* Topic 1: Personal Reflection and Connection
+
+Keywords: friend, feel, time, home, played, favorite
+
+This topic strongly emphasizes personal relationships and intimate moments spent with friends and at home. The presence of "feel" suggests emotional depth, indicating moments of happiness tied to feelings of connection or shared experiences ("played", "favorite"). This could represent personal reflection on moments spent with loved ones or engaging in favorite activities that evoke a sense of belonging and joy.
+
+
+* Topic 2: Daily Life and Family Time
+
+Keywords: day, friend, time, watched, played, son
+
+Focused on daily activities, this topic highlights the routine yet meaningful aspects of life, such as spending time with family ("son") and friends. The terms "watched" and "played" suggest leisure activities, possibly indicating how ordinary days are made special through shared experiences. This topic may capture the happiness found in the simplicity and comfort of everyday life.
+
+
+* Topic 3: Evening Activities and Social Gatherings
+
+Keywords: time, night, game, started, called, dinner
+
+With a clear focus on evening or nighttime, this topic is likely about social gatherings or activities that take place after daytime hours. The inclusion of "game", "dinner", and "called" points towards interactive and social activities, possibly indicating moments of happiness stemming from engaging with others in a relaxed setting.
+
+
+* Topic 4: Milestones and Family Achievements
+
+Keywords: day, friend, time, finally, home, family
+
+This topic seems to revolve around significant life events or milestones ("finally") that are celebrated or acknowledged with friends and family. The terms suggest a sense of achievement or fulfillment, possibly related to long-awaited goals or happy occasions celebrated at "home" with "family". It highlights the importance of communal support and shared joy in personal accomplishments.
+
+
+* Topic 5: Discovery and Shared Experiences
+
+Keywords: day, found, moment, watched, friend, house
+
+Interpretation: Centered on moments of discovery ("found") and shared experiences ("watched" with a "friend"), this topic might capture instances of learning, realization, or entertainment experienced with others. The use of "moment" and "house" suggests these discoveries or experiences are both immediate and intimate, occurring within personal spaces or in the course of daily life.
+
+Across these topics, there's a recurring emphasis on shared experiences, emotional connections, and the joy found in both the extraordinary and the mundane aspects of life. While Topics 1, 2, and 5 touch more on the intimate and everyday happiness found with friends and family, Topics 3 and 4 hint at social gatherings and significant life events as sources of joy. This nuanced breakdown illustrates the multifaceted nature of happiness as captured in your dataset, revealing how happiness is experienced and cherished across different contexts and relationships.
+
+```{r}
+# Assign row identifiers to the data frame
+data$row_id <- seq_len(nrow(data))
+# Create a Document-Term Matrix (DTM)
+dtm <- DocumentTermMatrix(corpus)
+# Apply sparsity threshold
+dtm <- removeSparseTerms(dtm, sparse = 0.99)
+# Filter out all-zero rows but keep track of the row ids
+non_zero_rows <- which(rowSums(as.matrix(dtm)) > 0)
+dtm <- dtm[non_zero_rows, ]
+tfidf <- weightTfIdf(dtm)
+# Convert as matrix
+tfidf_matrix <- as.matrix(tfidf)
+set.seed(123)
+k <- 5 # can be changed
+clusters <- kmeans(tfidf_matrix, centers = k, nstart = 25)
+data$row_id <- 1:nrow(data)  
+cluster_assignments <- data.frame(row_id = non_zero_rows, cluster = clusters$cluster)
+
+# Merge cluster assignments back into the original data
+data <- merge(data, cluster_assignments, by = "row_id", all.x = TRUE)
+
+
+# Visualize top terms in each cluster based on TF-IDF
+cluster_terms <- tidy(dtm) %>%
+  bind_tf_idf(term, document, count) %>%
+  mutate(cluster = data$cluster[as.numeric(document)]) %>%
+  filter(!is.na(cluster)) %>%
+  group_by(cluster) %>%
+  top_n(10, tf_idf) %>%
+  ungroup() %>%
+  mutate(term = reorder(term, tf_idf))
+
+ggplot(cluster_terms, aes(x = term, y = tf_idf, fill = factor(cluster))) +
+  geom_bar(stat = "identity") +
+  coord_flip() +
+  labs(x = "Term", y = "TF-IDF", title = "Top Terms in Each Cluster Based on TF-IDF") +
+  facet_wrap(~cluster, scales = "free") +
+  theme_minimal()
+
+```
+
+Cluster 1 (Red): The term "finally" has the highest TF-IDF score in this cluster. This suggests that the concept of completion or reaching a goal is significant within this group. The term could be associated with moments where individuals have accomplished tasks or milestones that they have been working towards, capturing a sense of achievement and resolution.
+
+Cluster 2 (Green): In this cluster, "bought" is the prominent term. This might indicate a focus on purchasing or acquiring new items, which can be linked to feelings of happiness derived from ownership or the enjoyment of new experiences associated with the purchase.
+
+Cluster 3 (Teal): The term "person" stands out here. This could imply that interpersonal relationships or individual people are central themes, emphasizing the importance of social connections and individual interactions in contributing to happiness.
+
+Cluster 4 (Blue): The term "found" is prevalent, suggesting discovery or realization as a theme. This cluster might capture moments of finding something valuable or uncovering new insights, which can be particularly rewarding and fulfilling.
+
+Cluster 5 (Purple): This cluster has a variety of terms with "gift" having a significant TF-IDF score. The presence of terms like "sleep," "cat," "class," "free," "college," "people," and "gift" indicates a diverse range of themes. However, the term "gift" suggests that giving or receiving presents is a notable source of happiness within this cluster. Other terms point to various aspects of daily life and experiences in educational settings.
+
+
+## Conclusion
+
+An exploration of HappyDB reveals a tapestry of happiness woven from the threads of intimacy, achievement, leisure and shared experience. The word cloud vividly emphasizes that connections with family and friends, as well as precious personal moments, are at the heart of our happiness. Demographic analysis further enriches our understanding, showing how age and marital status influence the theme of happiness, with younger adults tending to favor achievement, while elders find more joy in affections.
+
+Thematic modeling revealed different contexts for happiness, from personal reflection and daily life to social gatherings and important milestones, illustrating the complex interplay between individual pursuits and collective experiences in shaping our moments of happiness.
+
+Analyses of predicted happiness categories reveal distinct patterns related to gender and age that resonate with social norms and developmental stages. Men were more strongly associated with "achievement" and "leisure," suggesting that they tend to find happiness in success and relaxation. In contrast, women more frequently mentioned 'affection', which highlights the value placed on emotional bonds and caregiving roles. Notably, the transition from the 20-29 age group to the 30-39 age group, where 'achievement' gives way to 'affection', suggests that as individuals mature, the source of happiness shifts from professional and personal success to deeper relationships.
+
+Cluster analyses further revealed different aspects of happiness, ranging from the culmination of effort and new discoveries to the simple pleasures of everyday life and the joy of relationships. Together, these insights emphasize the multifaceted and evolving nature of happiness across populations.
+
+This analysis is not only consistent with social conventions, but also prompts reflection on the evolving nature of happiness across life stages. It emphasizes the importance of social bonds and personal fulfillment as universal pillars of happiness, while also highlighting the unique ways in which we seek and experience joy. By dissecting the happiness narratives in HappyDB, we gain insights into the common human quest for happiness, laying the groundwork for further exploration of the ways in which happiness is perceived, pursued, and remembered throughout the society.
