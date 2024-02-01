@@ -7,7 +7,7 @@
 ### [Project Description](doc/Proj1_desc.md)
 This is the first and only *individual* (as opposed to *team*) this semester. 
 
-Term: Fall 2023
+Term: Spring 2024
 
 + Projec title: What is the current trend for gaining happiness? Is it same across demographics?
 + This project is conducted by Forain Zhang
